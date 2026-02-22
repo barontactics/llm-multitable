@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev)",
+      "Bash(npm install @modelcontextprotocol/sdk)",
+      "WebFetch(domain:console.cloud.google.com)",
+      "Bash(npm install express-session)",
+      "Bash(npm install --save-dev @types/express-session)",
+      "Bash(convert icon.svg -resize 16x16 icon16.png)",
+      "Bash(convert icon.svg -resize 48x48 icon48.png)",
+      "Bash(convert icon.svg -resize 128x128 icon128.png)",
+      "Bash(lsof -ti:3001)",
+      "Bash(xargs kill -9)",
+      "WebFetch(domain:developers.google.com)",
+      "WebSearch",
+      "Bash(npm install textract node-unzip-2 csv-parse marked)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
