@@ -7,12 +7,23 @@ import { MCP_TOOLS, executeMCPTool } from './mcp-tools.js'
 import { GDRIVE_TOOLS, executeGDriveTool } from './gdrive-tools.js'
 import { initGoogleAuth, getAuthUrl, getTokenFromCode, createUserClient, getUserClient } from './gdrive-auth.js'
 import { google } from 'googleapis'
+import { claudeSessionManager } from './claude-session-manager.js'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3001
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// Anthropic client setup
+// Note: OAuth tokens (sk-ant-oat01-...) from Claude Code are workspace-scoped
+// and may have different expiration/refresh requirements than standard API keys
+const apiKey = process.env.ANTHROPIC_API_KEY || ''
+
+if (!apiKey) {
+  console.error('⚠️  ANTHROPIC_API_KEY not found in .env file')
+}
+
+const client = new Anthropic({ apiKey })
 
 // Initialize Google Drive auth (for env-based flow)
 initGoogleAuth()
@@ -189,6 +200,74 @@ Files are visible in the "Files in Context" section with clickable links for the
   } finally {
     res.end()
   }
+})
+
+// ─── Local Claude CLI chat endpoint (uses subscription OAuth token) ───────
+app.post('/api/chat/local', async (req, res) => {
+  const { sessionId, message } = req.body
+
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'message string required' })
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders()
+
+  try {
+    // Create or reuse session
+    let activeSessionId = sessionId
+    if (!activeSessionId || !claudeSessionManager.getActiveSessions().includes(activeSessionId)) {
+      activeSessionId = await claudeSessionManager.createSession(sessionId)
+      res.write(`data: ${JSON.stringify({ type: 'session_created', sessionId: activeSessionId })}\n\n`)
+    }
+
+    // Send message and stream response
+    await claudeSessionManager.sendMessage(
+      activeSessionId,
+      message,
+      (text) => {
+        // Stream text chunks
+        res.write(`data: ${JSON.stringify({ type: 'delta', text })}\n\n`)
+      },
+      () => {
+        // Completion handler
+        res.write(`data: ${JSON.stringify({ type: 'done', sessionId: activeSessionId })}\n\n`)
+        res.end()
+      },
+      (error) => {
+        // Error handler
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error })}\n\n`)
+        res.end()
+      }
+    )
+  } catch (err: any) {
+    res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`)
+    res.end()
+  }
+})
+
+// ─── Terminate Claude CLI session ──────────────────────────────────────────
+app.post('/api/chat/local/terminate', async (req, res) => {
+  const { sessionId } = req.body
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId required' })
+  }
+
+  try {
+    await claudeSessionManager.terminateSession(sessionId)
+    res.json({ ok: true, sessionId })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── Get active Claude CLI sessions ────────────────────────────────────────
+app.get('/api/chat/local/sessions', (_req, res) => {
+  const sessions = claudeSessionManager.getActiveSessions()
+  res.json({ sessions })
 })
 
 // ─── Context tag extraction endpoint ─────────────────────────────────────

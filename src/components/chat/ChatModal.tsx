@@ -87,6 +87,7 @@ export default function ChatModal({ session, onClose }: Props) {
   const sendMessage = useChatStore(s => s.sendMessage)
   const renameSession = useChatStore(s => s.renameSession)
   const toggleTools = useChatStore(s => s.toggleTools)
+  const toggleLocalMode = useChatStore(s => s.toggleLocalMode)
   const _setStatus = useChatStore(s => s._setStatus)
 
   const isBusy = session.status === 'thinking' || session.status === 'streaming'
@@ -231,6 +232,21 @@ export default function ChatModal({ session, onClose }: Props) {
               🔧 {session.useTools ? 'ON' : 'OFF'}
             </button>
 
+            {/* Local mode toggle */}
+            <button
+              onClick={() => toggleLocalMode(session.id)}
+              className={`
+                text-[10px] font-semibold tracking-widest uppercase px-2 py-1 rounded-lg transition-all
+                ${session.useLocalMode
+                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 hover:bg-purple-500/30'
+                  : 'bg-white/5 text-zinc-500 border border-white/8 hover:bg-white/10'
+                }
+              `}
+              title={session.useLocalMode ? 'Local Claude Code (Subscription)' : 'Use Local Claude Code'}
+            >
+              💻 {session.useLocalMode ? 'LOCAL' : 'API'}
+            </button>
+
             {/* Claude badge */}
             <span className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500 bg-white/5 border border-white/8 px-2 py-1 rounded-lg">
               Claude
@@ -297,15 +313,9 @@ export default function ChatModal({ session, onClose }: Props) {
         {session.useTools && (
           <div className="px-5 py-2.5 border-b border-emerald-500/10 bg-emerald-500/5 flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-col gap-1.5 text-xs flex-1">
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <span>🔧</span>
-                  <span className="font-medium">Unified File Tools:</span>
-                  <span className="text-emerald-500/70">read_file, list_directory, write_file, search_files</span>
-                </div>
-                <div className="text-[10px] text-emerald-500/60 pl-6">
-                  Use <code className="bg-emerald-500/10 px-1 rounded">local/</code> prefix for local files, <code className="bg-emerald-500/10 px-1 rounded">gdrive/</code> for Google Drive
-                </div>
+              <div className="flex items-center gap-2 text-xs text-emerald-400">
+                <span>🔧</span>
+                <span>MCP Connectors</span>
               </div>
 
               {/* File browser buttons */}

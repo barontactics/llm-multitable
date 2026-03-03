@@ -20,6 +20,7 @@ function makeSession(overrides?: Partial<ChatSession>): ChatSession {
     lastUserPrompt: '',
     streamingContent: '',
     useTools: false,
+    useLocalMode: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     ...overrides,
@@ -45,6 +46,7 @@ interface ChatStore {
   setGridLayout: (layout: GridLayout) => void
   renameSession: (id: string, title: string) => void
   toggleTools: (id: string) => void
+  toggleLocalMode: (id: string) => void
   addFileAttachment: (sessionId: string, file: Omit<FileAttachment, 'id' | 'addedAt'>) => void
 
   // Google auth
@@ -105,6 +107,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const session = get().sessions.find(s => s.id === id)
     if (session) {
       get()._patch(id, { useTools: !session.useTools })
+    }
+  },
+
+  toggleLocalMode: (id) => {
+    const session = get().sessions.find(s => s.id === id)
+    if (session) {
+      get()._patch(id, { useLocalMode: !session.useLocalMode })
     }
   },
 
@@ -292,13 +301,24 @@ async function streamResponse(sessionId: string, messages: Message[]) {
   if (!session) return
 
   try {
-    const res = await fetch('/api/chat', {
+    // Choose endpoint based on local mode
+    const endpoint = session.useLocalMode ? '/api/chat/local' : '/api/chat'
+
+    // Build request body based on mode
+    const body = session.useLocalMode
+      ? {
+          sessionId: session.localSessionId || sessionId,
+          message: messages[messages.length - 1]?.content || '',
+        }
+      : {
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          useTools: session.useTools,
+        }
+
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        useTools: session.useTools,
-      }),
+      body: JSON.stringify(body),
     })
 
     if (!res.ok || !res.body) {
@@ -324,7 +344,10 @@ async function streamResponse(sessionId: string, messages: Message[]) {
         try {
           const event = JSON.parse(line.slice(6))
 
-          if (event.type === 'delta') {
+          if (event.type === 'session_created') {
+            // Store local session ID
+            useChatStore.getState()._patch(sessionId, { localSessionId: event.sessionId })
+          } else if (event.type === 'delta') {
             useChatStore.getState()._appendStream(sessionId, event.text)
           } else if (event.type === 'tool_uses') {
             toolUses = event.tools

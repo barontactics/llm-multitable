@@ -61,6 +61,8 @@ export interface ChatSession {
   error?: string
   attentionAt?: number       // timestamp when attention was needed
   useTools: boolean          // whether this chat has MCP tools enabled
+  useLocalMode: boolean      // whether to use local Claude Code CLI (subscription token)
+  localSessionId?: string    // Claude CLI session ID for local mode
   pendingToolUses?: ToolUse[] // tools waiting to be executed
 }
 
